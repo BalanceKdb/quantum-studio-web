@@ -1,882 +1,862 @@
-/* === 量子事务所 · AI短剧工作台 === */
-const App = {
-  currentPage: 'dashboard',
-  init() {
-    this.bindNav();
-    this.bindAITabs();
-    Topics.init();
-    Scripts.init();
-    Characters.init();
-    Calendar.init();
-    Settings.load();
-    this.updateDashboard();
-    this.navigate('dashboard');
-    document.getElementById('tts-rate').addEventListener('input', e => {
-      document.getElementById('tts-rate-val').textContent = e.target.value + 'x';
-    });
-  },
-  navigate(page) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    const el = document.getElementById('page-' + page);
-    const nav = document.querySelector(`.nav-item[data-page="${page}"]`);
-    if (el) el.classList.add('active');
-    if (nav) nav.classList.add('active');
-    this.currentPage = page;
-    if (page === 'dashboard') this.updateDashboard();
-    if (page === 'kanban') Kanban.render();
-    if (page === 'calendar') Calendar.render();
-  },
-  bindNav() {
-    document.querySelectorAll('.nav-item').forEach(item => {
-      item.addEventListener('click', () => this.navigate(item.dataset.page));
-    });
-  },
-  bindAITabs() {
-    document.querySelectorAll('.ai-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.ai-panel').forEach(p => p.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-      });
-    });
-  },
-  updateDashboard() {
-    const topics = Store.get('topics') || [];
-    const scripts = Store.get('scripts') || [];
-    const characters = Store.get('characters') || [];
-    document.getElementById('stat-topics').textContent = topics.length;
-    document.getElementById('stat-scripts').textContent = scripts.length;
-    document.getElementById('stat-episodes').textContent = scripts.filter(s => s.status === '已发布').length;
-    document.getElementById('stat-characters').textContent = characters.length;
-    // Recent activity
-    const all = [
-      ...topics.map(t => ({...t, _type: '选题', _ts: t.updatedAt || t.createdAt})),
-      ...scripts.map(s => ({...s, _type: '剧本', _ts: s.updatedAt || s.createdAt})),
-      ...characters.map(c => ({...c, _type: '角色', _ts: c.updatedAt || c.createdAt}))
-    ].sort((a, b) => (b._ts || 0) - (a._ts || 0)).slice(0, 8);
-    const actEl = document.getElementById('recent-activity');
-    if (all.length === 0) {
-      actEl.innerHTML = '<p class="empty-hint">暂无动态，开始创建你的第一个选题吧</p>';
-    } else {
-      actEl.innerHTML = all.map(item => `
-        <div class="activity-item">
-          <span class="activity-time">${Utils.timeAgo(item._ts)}</span>
-          <span>${item._type}：${Utils.esc(item.title || item.name)}</span>
-        </div>
-      `).join('');
-    }
-  }
-};
+/* ========================================
+   量子事务所 Quantum Studio - 主脚本
+   ======================================== */
 
-/* === Store (localStorage wrapper) === */
-const Store = {
-  get(key) { try { return JSON.parse(localStorage.getItem('qs_' + key)); } catch { return null; } },
-  set(key, val) { localStorage.setItem('qs_' + key, JSON.stringify(val)); },
-  remove(key) { localStorage.removeItem('qs_' + key); }
-};
+// =====================================================
+//  一、量子粒子动画系统
+// =====================================================
 
-/* === Utils === */
-const Utils = {
-  id: () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-  esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; },
-  timeAgo(ts) {
-    if (!ts) return '';
-    const diff = Date.now() - ts;
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
-    return Math.floor(diff / 86400000) + '天前';
-  }
-};
+const canvas = document.getElementById('particle-canvas');
+const ctx = canvas.getContext('2d');
 
-/* === Modal === */
-const Modal = {
-  open(title, bodyHtml, footerHtml) {
-    document.getElementById('modal-title').textContent = title;
-    document.getElementById('modal-body').innerHTML = bodyHtml;
-    document.getElementById('modal-footer').innerHTML = footerHtml || '';
-    document.getElementById('modal-overlay').classList.add('show');
-  },
-  close() {
-    document.getElementById('modal-overlay').classList.remove('show');
-  }
-};
+let particles = [];
+const PARTICLE_COUNT = 200;
+const CONNECTION_DISTANCE = 140;
+const MOUSE_RADIUS = 180;
+const MOUSE_FORCE = 0.06;
 
-/* === Toast === */
-function toast(msg, type = 'info') {
-  const el = document.createElement('div');
-  el.className = 'toast ' + type;
-  el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+let mouse = { x: -9999, y: -9999 };
+let animationId;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
 }
 
-/* ============================
-   Topics Module
-   ============================ */
-const Topics = {
-  init() { if (!Store.get('topics')) Store.set('topics', []); },
-  getAll() { return Store.get('topics') || []; },
-  save(list) { Store.set('topics', list); },
-  render() {
-    const list = this.getAll();
-    const statusF = document.getElementById('topic-filter-status').value;
-    const fieldF = document.getElementById('topic-filter-field').value;
-    const search = document.getElementById('topic-search').value.toLowerCase();
-    const filtered = list.filter(t =>
-      (statusF === 'all' || t.status === statusF) &&
-      (fieldF === 'all' || t.field === fieldF) &&
-      (!search || t.title.toLowerCase().includes(search) || (t.desc || '').toLowerCase().includes(search))
-    );
-    const el = document.getElementById('topics-list');
-    if (filtered.length === 0) {
-      el.innerHTML = '<p class="empty-hint">没有找到选题，点击上方按钮新建</p>';
-      return;
-    }
-    el.innerHTML = filtered.map(t => `
-      <div class="card" onclick="Topics.showEdit('${t.id}')">
-        <div class="card-actions">
-          <button class="btn-sm" onclick="event.stopPropagation();Topics.remove('${t.id}')">🗑</button>
-        </div>
-        <div class="card-title">${Utils.esc(t.title)}</div>
-        <div class="card-desc">${Utils.esc(t.desc)}</div>
-        <div class="card-meta">
-          <span class="tag tag-field">${Utils.esc(t.field)}</span>
-          <span class="tag tag-status">${Utils.esc(t.status)}</span>
-          ${t.score ? `<span class="tag tag-score">戏剧性 ${t.score}/10</span>` : ''}
-        </div>
-      </div>
-    `).join('');
-  },
-  showAdd() {
-    Modal.open('新建选题', `
-      <div class="form-group"><label>概念名称</label><input type="text" id="t-title" placeholder="例如：量子纠缠"></div>
-      <div class="form-group"><label>一句话解释</label><textarea id="t-desc" rows="2" placeholder="用一句话解释这个概念"></textarea></div>
-      <div class="form-group"><label>所属领域</label>
-        <select id="t-field"><option>量子力学基础</option><option>量子信息</option><option>量子场论</option><option>量子光学</option><option>量子计算</option><option>其他</option></select>
-      </div>
-      <div class="form-group"><label>戏剧潜力 (1-10)</label><input type="number" id="t-score" min="1" max="10" value="7"></div>
-      <div class="form-group"><label>剧情灵感</label><textarea id="t-idea" rows="3" placeholder="初步的剧情想法..."></textarea></div>
-      <div class="form-group"><label>状态</label>
-        <select id="t-status"><option>待用</option><option>储备</option><option>已用</option></select>
-      </div>
-    `, `<button class="btn-secondary" onclick="Modal.close()">取消</button><button class="btn-primary" onclick="Topics.add()">创建</button>`
-    );
-  },
-  add() {
-    const item = {
-      id: Utils.id(),
-      title: document.getElementById('t-title').value.trim(),
-      desc: document.getElementById('t-desc').value.trim(),
-      field: document.getElementById('t-field').value,
-      score: parseInt(document.getElementById('t-score').value) || 7,
-      idea: document.getElementById('t-idea').value.trim(),
-      status: document.getElementById('t-status').value,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    if (!item.title) { toast('请填写概念名称', 'error'); return; }
-    const list = this.getAll();
-    list.unshift(item);
-    this.save(list);
-    Modal.close();
-    this.render();
-    toast('选题已创建', 'success');
-  },
-  showEdit(id) {
-    const item = this.getAll().find(t => t.id === id);
-    if (!item) return;
-    Modal.open('编辑选题', `
-      <div class="form-group"><label>概念名称</label><input type="text" id="t-title" value="${Utils.esc(item.title)}"></div>
-      <div class="form-group"><label>一句话解释</label><textarea id="t-desc" rows="2">${Utils.esc(item.desc)}</textarea></div>
-      <div class="form-group"><label>所属领域</label>
-        <select id="t-field">${['量子力学基础','量子信息','量子场论','量子光学','量子计算','其他'].map(f => `<option${f===item.field?' selected':''}>${f}</option>`).join('')}</select>
-      </div>
-      <div class="form-group"><label>戏剧潜力 (1-10)</label><input type="number" id="t-score" min="1" max="10" value="${item.score||7}"></div>
-      <div class="form-group"><label>剧情灵感</label><textarea id="t-idea" rows="3">${Utils.esc(item.idea)}</textarea></div>
-      <div class="form-group"><label>状态</label>
-        <select id="t-status">${['待用','储备','已用'].map(s => `<option${s===item.status?' selected':''}>${s}</option>`).join('')}</select>
-      </div>
-    `, `<button class="btn-secondary" onclick="Modal.close()">取消</button><button class="btn-primary" onclick="Topics.saveEdit('${id}')">保存</button>`
-    );
-  },
-  saveEdit(id) {
-    const list = this.getAll();
-    const idx = list.findIndex(t => t.id === id);
-    if (idx === -1) return;
-    list[idx] = {
-      ...list[idx],
-      title: document.getElementById('t-title').value.trim(),
-      desc: document.getElementById('t-desc').value.trim(),
-      field: document.getElementById('t-field').value,
-      score: parseInt(document.getElementById('t-score').value) || 7,
-      idea: document.getElementById('t-idea').value.trim(),
-      status: document.getElementById('t-status').value,
-      updatedAt: Date.now()
-    };
-    this.save(list);
-    Modal.close();
-    this.render();
-    toast('已保存', 'success');
-  },
-  remove(id) {
-    if (!confirm('确定删除？')) return;
-    this.save(this.getAll().filter(t => t.id !== id));
-    this.render();
-    toast('已删除');
-  }
-};
+window.addEventListener('resize', resizeCanvas);
 
-/* ============================
-   Scripts Module
-   ============================ */
-const Scripts = {
-  init() { if (!Store.get('scripts')) Store.set('scripts', []); },
-  getAll() { return Store.get('scripts') || []; },
-  save(list) { Store.set('scripts', list); },
-  render() {
-    const list = this.getAll();
-    const statusF = document.getElementById('script-filter-status').value;
-    const filtered = statusF === 'all' ? list : list.filter(s => s.status === statusF);
-    const el = document.getElementById('scripts-list');
-    if (filtered.length === 0) {
-      el.innerHTML = '<p class="empty-hint">没有剧本，点击上方按钮新建</p>';
-      return;
-    }
-    el.innerHTML = filtered.map(s => `
-      <div class="card" onclick="Scripts.showEdit('${s.id}')">
-        <div class="card-actions">
-          <button class="btn-sm" onclick="event.stopPropagation();Scripts.remove('${s.id}')">🗑</button>
-        </div>
-        <div class="card-title">${Utils.esc(s.title)}</div>
-        <div class="card-desc">${Utils.esc((s.concept || '') + ' · ' + (s.script || '').slice(0, 60))}</div>
-        <div class="card-meta">
-          <span class="tag tag-field">${Utils.esc(s.concept || '未指定')}</span>
-          <span class="tag tag-status">${Utils.esc(s.status)}</span>
-          <span class="tag tag-drama">EP${s.epNum || '?'}</span>
-        </div>
-      </div>
-    `).join('');
-  },
-  showAdd() {
-    const topics = Topics.getAll();
-    Modal.open('新建剧本', `
-      <div class="form-group"><label>剧集标题</label><input type="text" id="s-title" placeholder="例如：薛定谔的快递"></div>
-      <div class="form-group"><label>集数</label><input type="number" id="s-epnum" min="1" value="1"></div>
-      <div class="form-group"><label>关联量子概念</label>
-        <select id="s-concept"><option value="">-- 选择或手动输入 --</option>${topics.map(t => `<option>${Utils.esc(t.title)}</option>`).join('')}</select>
-        <input type="text" id="s-concept-custom" placeholder="或手动输入概念" style="margin-top:6px">
-      </div>
-      <div class="form-group"><label>剧本内容</label><textarea id="s-script" rows="8" placeholder="分镜格式：\n[场景1] 画面描述\n台词...\n[场景2] ..."></textarea></div>
-      <div class="form-group"><label>时长（秒）</label><input type="number" id="s-duration" value="90"></div>
-      <div class="form-group"><label>状态</label>
-        <select id="s-status"><option>构思中</option><option>初稿</option><option>定稿</option><option>已制作</option><option>已发布</option></select>
-      </div>
-      <div class="form-group"><label>发布时间</label><input type="date" id="s-pubdate"></div>
-    `, `<button class="btn-secondary" onclick="Modal.close()">取消</button><button class="btn-primary" onclick="Scripts.add()">创建</button>`
-    );
-  },
-  add() {
-    const item = {
-      id: Utils.id(),
-      title: document.getElementById('s-title').value.trim(),
-      epNum: parseInt(document.getElementById('s-epnum').value) || 1,
-      concept: document.getElementById('s-concept-custom').value.trim() || document.getElementById('s-concept').value,
-      script: document.getElementById('s-script').value,
-      duration: parseInt(document.getElementById('s-duration').value) || 90,
-      status: document.getElementById('s-status').value,
-      pubDate: document.getElementById('s-pubdate').value,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    if (!item.title) { toast('请填写剧集标题', 'error'); return; }
-    const list = this.getAll();
-    list.unshift(item);
-    this.save(list);
-    Modal.close();
-    this.render();
-    toast('剧本已创建', 'success');
-  },
-  showEdit(id) {
-    const item = this.getAll().find(s => s.id === id);
-    if (!item) return;
-    const topics = Topics.getAll();
-    Modal.open('编辑剧本', `
-      <div class="form-group"><label>剧集标题</label><input type="text" id="s-title" value="${Utils.esc(item.title)}"></div>
-      <div class="form-group"><label>集数</label><input type="number" id="s-epnum" min="1" value="${item.epNum||1}"></div>
-      <div class="form-group"><label>关联量子概念</label>
-        <select id="s-concept"><option value="">-- 选择 --</option>${topics.map(t => `<option${t.title===item.concept?' selected':''}>${Utils.esc(t.title)}</option>`).join('')}</select>
-        <input type="text" id="s-concept-custom" placeholder="或手动输入" value="${Utils.esc(item.concept||'')}" style="margin-top:6px">
-      </div>
-      <div class="form-group"><label>剧本内容</label><textarea id="s-script" rows="10">${Utils.esc(item.script)}</textarea></div>
-      <div class="form-group"><label>时长（秒）</label><input type="number" id="s-duration" value="${item.duration||90}"></div>
-      <div class="form-group"><label>状态</label>
-        <select id="s-status">${['构思中','初稿','定稿','已制作','已发布'].map(st => `<option${st===item.status?' selected':''}>${st}</option>`).join('')}</select>
-      </div>
-      <div class="form-group"><label>发布时间</label><input type="date" id="s-pubdate" value="${item.pubDate||''}"></div>
-    `, `<button class="btn-secondary" onclick="Modal.close()">取消</button><button class="btn-secondary" onclick="Scripts.duplicate('${id}')">复制</button><button class="btn-primary" onclick="Scripts.saveEdit('${id}')">保存</button>`
-    );
-  },
-  saveEdit(id) {
-    const list = this.getAll();
-    const idx = list.findIndex(s => s.id === id);
-    if (idx === -1) return;
-    list[idx] = {
-      ...list[idx],
-      title: document.getElementById('s-title').value.trim(),
-      epNum: parseInt(document.getElementById('s-epnum').value) || 1,
-      concept: document.getElementById('s-concept-custom').value.trim() || document.getElementById('s-concept').value,
-      script: document.getElementById('s-script').value,
-      duration: parseInt(document.getElementById('s-duration').value) || 90,
-      status: document.getElementById('s-status').value,
-      pubDate: document.getElementById('s-pubdate').value,
-      updatedAt: Date.now()
-    };
-    this.save(list);
-    Modal.close();
-    this.render();
-    toast('已保存', 'success');
-  },
-  duplicate(id) {
-    const item = this.getAll().find(s => s.id === id);
-    if (!item) return;
-    const copy = {...item, id: Utils.id(), title: item.title + ' (副本)', createdAt: Date.now(), updatedAt: Date.now()};
-    const list = this.getAll();
-    list.unshift(copy);
-    this.save(list);
-    Modal.close();
-    this.render();
-    toast('已复制', 'success');
-  },
-  remove(id) {
-    if (!confirm('确定删除？')) return;
-    this.save(this.getAll().filter(s => s.id !== id));
-    this.render();
-    toast('已删除');
-  }
-};
+canvas.addEventListener('mousemove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
 
-/* ============================
-   Characters Module
-   ============================ */
-const Characters = {
-  init() {
-    if (!Store.get('characters')) {
-      Store.set('characters', [
-        { id: 'char-suozhang', name: '所长', role: '资深量子物理学家', personality: '沉稳、睿智、偶尔毒舌', voice: 'zh-CN-YunxiNeural', desc: '量子事务所所长，负责解释原理。总是叼着一根没点燃的烟。', isMain: true, createdAt: Date.now(), updatedAt: Date.now() },
-        { id: 'char-xinren', name: '新人', role: '量子事务所实习生', personality: '好奇、冲动、爱问问题', voice: 'zh-CN-XiaoxiaoNeural', desc: '刚入职的实习生，负责问观众想问的问题。对量子世界充满好奇。', isMain: true, createdAt: Date.now(), updatedAt: Date.now() },
-        { id: 'char-ai', name: 'AI助手', role: '量子扫描与可视化', personality: '冷静、精确、偶尔冷幽默', voice: 'zh-CN-YunjianNeural', desc: '事务所的AI系统，负责把量子过程可视化。它的"眼睛"就是观众的眼睛。', isMain: true, createdAt: Date.now(), updatedAt: Date.now() }
-      ]);
-    }
-  },
-  getAll() { return Store.get('characters') || []; },
-  save(list) { Store.set('characters', list); },
-  render() {
-    const list = this.getAll();
-    const el = document.getElementById('characters-list');
-    if (list.length === 0) {
-      el.innerHTML = '<p class="empty-hint">暂无角色</p>';
-      return;
-    }
-    el.innerHTML = list.map(c => `
-      <div class="card" onclick="Characters.showEdit('${c.id}')">
-        <div class="card-actions">
-          ${!c.isMain ? `<button class="btn-sm" onclick="event.stopPropagation();Characters.remove('${c.id}')">🗑</button>` : ''}
-        </div>
-        <div class="card-title">${Utils.esc(c.name)}</div>
-        <div class="card-desc">${Utils.esc(c.desc)}</div>
-        <div class="card-meta">
-          <span class="tag tag-field">${Utils.esc(c.role)}</span>
-          <span class="tag tag-status">${Utils.esc(c.personality)}</span>
-          ${c.isMain ? '<span class="tag tag-drama">固定角色</span>' : ''}
-        </div>
-      </div>
-    `).join('');
-  },
-  showAdd() {
-    Modal.open('新建角色', `
-      <div class="form-group"><label>角色名</label><input type="text" id="c-name" placeholder="例如：反派博士"></div>
-      <div class="form-group"><label>身份</label><input type="text" id="c-role" placeholder="例如：暗能量操控者"></div>
-      <div class="form-group"><label>性格标签</label><input type="text" id="c-personality" placeholder="例如：冷酷、聪明"></div>
-      <div class="form-group"><label>角色描述</label><textarea id="c-desc" rows="3" placeholder="外貌、背景故事等"></textarea></div>
-      <div class="form-group"><label>TTS语音</label>
-        <select id="c-voice">
-          <option value="zh-CN-YunxiNeural">云希 - 沉稳男声</option>
-          <option value="zh-CN-XiaoxiaoNeural">晓晓 - 清澈女声</option>
-          <option value="zh-CN-YunjianNeural">云健 - 科技感男声</option>
-          <option value="zh-CN-XiaoyiNeural">晓艺 - 温柔女声</option>
-          <option value="zh-CN-YunyangNeural">云扬 - 专业男声</option>
-        </select>
-      </div>
-    `, `<button class="btn-secondary" onclick="Modal.close()">取消</button><button class="btn-primary" onclick="Characters.add()">创建</button>`
-    );
-  },
-  add() {
-    const item = {
-      id: Utils.id(),
-      name: document.getElementById('c-name').value.trim(),
-      role: document.getElementById('c-role').value.trim(),
-      personality: document.getElementById('c-personality').value.trim(),
-      desc: document.getElementById('c-desc').value.trim(),
-      voice: document.getElementById('c-voice').value,
-      isMain: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    if (!item.name) { toast('请填写角色名', 'error'); return; }
-    const list = this.getAll();
-    list.push(item);
-    this.save(list);
-    Modal.close();
-    this.render();
-    toast('角色已创建', 'success');
-  },
-  showEdit(id) {
-    const item = this.getAll().find(c => c.id === id);
-    if (!item) return;
-    Modal.open('编辑角色', `
-      <div class="form-group"><label>角色名</label><input type="text" id="c-name" value="${Utils.esc(item.name)}"></div>
-      <div class="form-group"><label>身份</label><input type="text" id="c-role" value="${Utils.esc(item.role)}"></div>
-      <div class="form-group"><label>性格标签</label><input type="text" id="c-personality" value="${Utils.esc(item.personality)}"></div>
-      <div class="form-group"><label>角色描述</label><textarea id="c-desc" rows="3">${Utils.esc(item.desc)}</textarea></div>
-      <div class="form-group"><label>TTS语音</label>
-        <select id="c-voice">
-          ${['zh-CN-YunxiNeural|云希 - 沉稳男声','zh-CN-XiaoxiaoNeural|晓晓 - 清澈女声','zh-CN-YunjianNeural|云健 - 科技感男声','zh-CN-XiaoyiNeural|晓艺 - 温柔女声','zh-CN-YunyangNeural|云扬 - 专业男声'].map(v => {
-            const [val, label] = v.split('|');
-            return `<option value="${val}"${val===item.voice?' selected':''}>${label}</option>`;
-          }).join('')}
-        </select>
-      </div>
-    `, `<button class="btn-secondary" onclick="Modal.close()">取消</button><button class="btn-primary" onclick="Characters.saveEdit('${id}')">保存</button>`
-    );
-  },
-  saveEdit(id) {
-    const list = this.getAll();
-    const idx = list.findIndex(c => c.id === id);
-    if (idx === -1) return;
-    list[idx] = {
-      ...list[idx],
-      name: document.getElementById('c-name').value.trim(),
-      role: document.getElementById('c-role').value.trim(),
-      personality: document.getElementById('c-personality').value.trim(),
-      desc: document.getElementById('c-desc').value.trim(),
-      voice: document.getElementById('c-voice').value,
-      updatedAt: Date.now()
-    };
-    this.save(list);
-    Modal.close();
-    this.render();
-    toast('已保存', 'success');
-  },
-  remove(id) {
-    if (!confirm('确定删除？')) return;
-    this.save(this.getAll().filter(c => c.id !== id));
-    this.render();
-    toast('已删除');
-  }
-};
+canvas.addEventListener('mouseleave', () => {
+  mouse.x = -9999;
+  mouse.y = -9999;
+});
 
-/* ============================
-   Kanban Module
-   ============================ */
-const Kanban = {
-  statuses: ['剧本', '生图', '生视频', '配音', '剪辑', '已发布'],
-  render() {
-    const scripts = Scripts.getAll();
-    this.statuses.forEach(status => {
-      const col = document.getElementById('kanban-' + status);
-      const cards = scripts.filter(s => {
-        const ks = this.mapStatus(s.status);
-        return ks === status;
-      });
-      col.innerHTML = cards.map(s => `
-        <div class="kanban-card" draggable="true" data-id="${s.id}">
-          <div class="kc-title">EP${s.epNum||'?'} · ${Utils.esc(s.title)}</div>
-          <div class="kc-concept">${Utils.esc(s.concept||'')}</div>
-          <div class="kc-actions">
-            ${this.statuses.indexOf(status) > 0 ? `<button class="btn-sm" onclick="Kanban.move('${s.id}',-1)">◀</button>` : ''}
-            ${this.statuses.indexOf(status) < this.statuses.length - 1 ? `<button class="btn-sm" onclick="Kanban.move('${s.id}',1)">▶</button>` : ''}
+// 移动端触摸支持
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => {
+  mouse.x = -9999;
+  mouse.y = -9999;
+});
+
+class Particle {
+  constructor() {
+    this.reset();
+    // 初始随机分布
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+  }
+
+  reset() {
+    this.x = Math.random() * (canvas.width || window.innerWidth);
+    this.y = Math.random() * (canvas.height || window.innerHeight);
+    this.vx = (Math.random() - 0.5) * 1.2;
+    this.vy = (Math.random() - 0.5) * 1.2;
+    this.size = Math.random() * 2.5 + 0.8;
+    // 配色：量子蓝 或 量子紫
+    this.color = Math.random() < 0.55 ? 'rgba(0, 212, 255,' : 'rgba(124, 58, 237,';
+    this.alpha = Math.random() * 0.6 + 0.2;
+  }
+
+  update() {
+    // 鼠标吸引
+    const dx = mouse.x - this.x;
+    const dy = mouse.y - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < MOUSE_RADIUS) {
+      const force = (MOUSE_RADIUS - dist) / MOUSE_RADIUS;
+      this.vx += (dx / dist) * force * MOUSE_FORCE;
+      this.vy += (dy / dist) * force * MOUSE_FORCE;
+    }
+
+    // 阻尼
+    this.vx *= 0.998;
+    this.vy *= 0.998;
+
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // 边界回弹
+    if (this.x < 0) { this.x = 0; this.vx *= -1; }
+    if (this.x > canvas.width) { this.x = canvas.width; this.vx *= -1; }
+    if (this.y < 0) { this.y = 0; this.vy *= -1; }
+    if (this.y > canvas.height) { this.y = canvas.height; this.vy *= -1; }
+  }
+
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fillStyle = this.color + this.alpha + ')';
+    ctx.fill();
+  }
+}
+
+function initParticles() {
+  particles = [];
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push(new Particle());
+  }
+}
+
+function drawConnections() {
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < CONNECTION_DISTANCE) {
+        const opacity = (1 - dist / CONNECTION_DISTANCE) * 0.25;
+        // 根据距离混合颜色
+        const midX = (particles[i].x + particles[j].x) / 2;
+        const gradient = ctx.createLinearGradient(
+          particles[i].x, particles[i].y,
+          particles[j].x, particles[j].y
+        );
+        gradient.addColorStop(0, 'rgba(0, 212, 255,' + opacity + ')');
+        gradient.addColorStop(1, 'rgba(124, 58, 237,' + opacity + ')');
+
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  particles.forEach(p => {
+    p.update();
+    p.draw();
+  });
+
+  drawConnections();
+  animationId = requestAnimationFrame(animateParticles);
+}
+
+resizeCanvas();
+initParticles();
+animateParticles();
+
+// =====================================================
+//  二、导航栏行为
+// =====================================================
+
+const navbar = document.getElementById('navbar');
+const navLinks = document.querySelectorAll('.nav-links a');
+const sections = document.querySelectorAll('section[id]');
+
+// 滚动时导航栏样式切换
+window.addEventListener('scroll', () => {
+  if (window.scrollY > 60) {
+    navbar.classList.add('scrolled');
+  } else {
+    navbar.classList.remove('scrolled');
+  }
+
+  // 更新激活链接
+  let current = '';
+  sections.forEach(section => {
+    const sectionTop = section.offsetTop - 120;
+    if (window.scrollY >= sectionTop) {
+      current = section.getAttribute('id');
+    }
+  });
+
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) {
+      link.classList.add('active');
+    }
+  });
+});
+
+// 平滑滚动
+navLinks.forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    const targetId = link.getAttribute('href').substring(1);
+    const target = document.getElementById(targetId);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // 移动端关闭菜单
+      document.getElementById('navLinks').classList.remove('open');
+      document.getElementById('menuToggle').classList.remove('active');
+    }
+  });
+});
+
+// 移动端菜单切换
+const menuToggle = document.getElementById('menuToggle');
+menuToggle.addEventListener('click', () => {
+  menuToggle.classList.toggle('active');
+  document.getElementById('navLinks').classList.toggle('open');
+});
+
+// =====================================================
+//  三、区段入场动画 (Intersection Observer)
+// =====================================================
+
+const revealElements = document.querySelectorAll('.reveal');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, {
+  threshold: 0.12,
+  rootMargin: '0px 0px -40px 0px'
+});
+
+revealElements.forEach(el => observer.observe(el));
+
+// =====================================================
+//  四、AI 工作台系统
+// =====================================================
+
+// --- 数据存储键 ---
+const STORAGE_KEY = 'quantum_studio_workbench';
+
+// --- 默认数据 ---
+function getDefaultData() {
+  return {
+    topics: [
+      { id: 't1', title: '量子恋人', genre: '科幻爱情', createdAt: Date.now() - 86400000 * 3 },
+      { id: 't2', title: '叠加态的周末', genre: '喜剧', createdAt: Date.now() - 86400000 * 2 },
+      { id: 't3', title: '薛定谔的面试', genre: '职场', createdAt: Date.now() - 86400000 }
+    ],
+    scripts: [
+      { id: 's1', title: '量子恋人·第一幕', topicId: 't1', content: '【场景：量子实验室】\n\n林深站在量子计算机前，屏幕上的数据流如星河般闪烁。她已经连续工作了36小时，只为验证那个疯狂的猜想——意识可以量子化传输。\n\n门开了。\n\n"还在忙？"\n\n她转身，看见苏默靠在门框上，手里拎着两杯咖啡。', createdAt: Date.now() - 86400000 * 2 }
+    ],
+    roles: [
+      { id: 'r1', name: '林深', traits: '量子物理学家，偏执、天才、孤独', createdAt: Date.now() - 86400000 * 3 },
+      { id: 'r2', name: '苏默', traits: 'AI工程师，温柔、幽默、坚定', createdAt: Date.now() - 86400000 * 3 }
+    ],
+    kanban: {
+      todo: [
+        { id: 'k1', title: '量子恋人 第二幕剧本', desc: '需要完成第二幕的初稿' },
+        { id: 'k2', title: '薛定谔的猫 分镜设计', desc: '科普动画分镜稿' }
+      ],
+      doing: [
+        { id: 'k3', title: '量子恋人 角色定妆', desc: '林深 & 苏默 的AI角色生成' }
+      ],
+      done: [
+        { id: 'k4', title: '项目立项书', desc: '量子事务所2026内容规划' }
+      ]
+    },
+    events: {}
+  };
+}
+
+// --- 本地存储操作 ---
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      // 确保结构完整
+      const defaults = getDefaultData();
+      for (const key of Object.keys(defaults)) {
+        if (!data[key]) data[key] = defaults[key];
+      }
+      return data;
+    }
+  } catch (e) { /* ignore */ }
+  return getDefaultData();
+}
+
+function saveData(data) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    showToast('存储空间不足，请清理数据', 'error');
+  }
+}
+
+let appData = loadData();
+
+// --- 生成唯一 ID ---
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+}
+
+// --- Toast 通知 ---
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast ' + type + ' show';
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2500);
+}
+
+// --- 工作台面板切换 ---
+const workbenchTabs = document.getElementById('workbenchTabs');
+const workbenchPanels = document.querySelectorAll('.workbench-panel');
+
+workbenchTabs.addEventListener('click', (e) => {
+  const tab = e.target.closest('.workbench-tab');
+  if (!tab) return;
+
+  // 切换激活标签
+  document.querySelectorAll('.workbench-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+
+  // 切换面板
+  const panelId = tab.getAttribute('data-panel');
+  workbenchPanels.forEach(p => p.classList.remove('active'));
+  document.getElementById(panelId).classList.add('active');
+
+  // 切换面板时刷新对应内容
+  if (panelId === 'panel-kanban') renderKanban();
+  if (panelId === 'panel-calendar') renderCalendar();
+  if (panelId === 'panel-scripts') refreshScriptTopicRef();
+});
+
+// =====================================================
+//  选题库
+// =====================================================
+
+function renderTopics() {
+  const container = document.getElementById('topicsList');
+  if (appData.topics.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0;">暂无选题，添加你的第一个创意吧 ✨</p>';
+    return;
+  }
+
+  container.innerHTML = appData.topics.map(t => {
+    const date = new Date(t.createdAt);
+    const dateStr = date.getFullYear() + '年' + String(date.getMonth()+1).padStart(2,'0') + '月' + String(date.getDate()).padStart(2,'0') + '日 ' + String(date.getHours()).padStart(2,'0') + ':' + String(date.getMinutes()).padStart(2,'0');
+    return `
+      <div class="wb-card" data-id="${t.id}">
+        <div style="display:flex;justify-content:space-between;align-items:start;">
+          <div>
+            <h4>${escapeHtml(t.title)}</h4>
+            <p><span style="background:rgba(0,212,255,0.1);color:var(--accent-cyan);padding:2px 10px;border-radius:50px;font-size:0.75rem;">${escapeHtml(t.genre)}</span>  ·  ${dateStr}</p>
           </div>
+          <button class="wb-btn wb-btn-danger wb-btn-sm" onclick="deleteTopic('${t.id}')">删除</button>
         </div>
-      `).join('');
-      col.closest('.kanban-column').querySelector('.count').textContent = cards.length;
-    });
-  },
-  mapStatus(scriptStatus) {
-    const map = { '构思中': '剧本', '初稿': '剧本', '定稿': '剧本', '已制作': '剪辑', '已发布': '已发布' };
-    return map[scriptStatus] || '剧本';
-  },
-  move(id, dir) {
-    const scripts = Scripts.getAll();
-    const idx = scripts.findIndex(s => s.id === id);
-    if (idx === -1) return;
-    const statusMap = {
-      '构思中': 0, '初稿': 0, '定稿': 0,
-      '生图': 1, '生视频': 2, '配音': 3, '剪辑': 4, '已发布': 5
-    };
-    let current = statusMap[scripts[idx].status] ?? 0;
-    current = Math.max(0, Math.min(this.statuses.length - 1, current + dir));
-    const reverseMap = ['构思中', '生图', '生视频', '配音', '剪辑', '已发布'];
-    scripts[idx].status = reverseMap[current];
-    scripts[idx].updatedAt = Date.now();
-    Scripts.save(scripts);
-    this.render();
-  }
-};
-
-/* ============================
-   Calendar Module
-   ============================ */
-const Calendar = {
-  year: new Date().getFullYear(),
-  month: new Date().getMonth(),
-  render() {
-    const title = document.getElementById('calendar-title');
-    title.textContent = `${this.year}年${this.month + 1}月`;
-    const grid = document.getElementById('calendar-grid');
-    const days = ['一', '二', '三', '四', '五', '六', '日'];
-    let html = days.map(d => `<div class="cal-header">${d}</div>`).join('');
-    const first = new Date(this.year, this.month, 1);
-    const last = new Date(this.year, this.month + 1, 0);
-    let startDay = first.getDay() - 1; if (startDay < 0) startDay = 6;
-    const scripts = Scripts.getAll();
-    const today = new Date();
-    // Previous month fill
-    const prevLast = new Date(this.year, this.month, 0);
-    for (let i = startDay - 1; i >= 0; i--) {
-      html += `<div class="cal-day other-month"><div class="cal-day-num">${prevLast.getDate() - i}</div></div>`;
-    }
-    // Current month
-    for (let d = 1; d <= last.getDate(); d++) {
-      const dateStr = `${this.year}-${String(this.month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const isToday = today.getFullYear() === this.year && today.getMonth() === this.month && today.getDate() === d;
-      const events = scripts.filter(s => s.pubDate === dateStr);
-      html += `<div class="cal-day${isToday ? ' today' : ''}">
-        <div class="cal-day-num">${d}</div>
-        ${events.map(e => `<div class="cal-event">EP${e.epNum||'?'} ${Utils.esc(e.title)}</div>`).join('')}
       </div>`;
-    }
-    // Next month fill
-    const remaining = 7 - ((startDay + last.getDate()) % 7);
-    if (remaining < 7) {
-      for (let i = 1; i <= remaining; i++) {
-        html += `<div class="cal-day other-month"><div class="cal-day-num">${i}</div></div>`;
-      }
-    }
-    grid.innerHTML = html;
-  },
-  prevMonth() { this.month--; if (this.month < 0) { this.month = 11; this.year--; } this.render(); },
-  nextMonth() { this.month++; if (this.month > 11) { this.month = 0; this.year++; } this.render(); }
-};
+  }).join('');
+}
 
+function addTopic() {
+  const titleEl = document.getElementById('topicInput');
+  const genreEl = document.getElementById('topicGenre');
+  const title = titleEl.value.trim();
+  const genre = genreEl.value.trim() || '未分类';
 
-const AIGen = {
-  backendAvailable: null,
-  _apiBase: '',
+  if (!title) { showToast('请输入选题标题', 'error'); return; }
 
-  async checkBackend() {
-    try {
-      const resp = await fetch(this._apiBase + '/api/config', { signal: AbortSignal.timeout(2000) });
-      this.backendAvailable = resp.ok;
-    } catch {
-      this.backendAvailable = false;
-    }
-    return this.backendAvailable;
-  },
+  appData.topics.unshift({
+    id: genId(),
+    title,
+    genre,
+    createdAt: Date.now()
+  });
 
-  async apiCall(path, body) {
-    if (this.backendAvailable !== false) {
-      try {
-        const resp = await fetch(this._apiBase + path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        if (resp.ok) return await resp.json();
-      } catch {}
-    }
-    return null;
-  },
+  saveData(appData);
+  renderTopics();
+  refreshScriptTopicRef();
+  titleEl.value = '';
+  genreEl.value = '';
+  showToast('选题已添加', 'success');
+}
 
-  async generateImage() {
-    const prompt = document.getElementById('img-prompt').value.trim();
-    if (!prompt) { toast('请输入画面描述', 'error'); return; }
-    const engine = document.getElementById('img-engine').value;
-    const size = document.getElementById('img-size').value;
-    const stylePrefix = document.getElementById('img-style-prefix').value;
-    const fullPrompt = stylePrefix + ' ' + prompt;
-    const resultEl = document.getElementById('img-result');
-    resultEl.innerHTML = '<div class="gen-loading"><div class="spinner"></div><span>正在生成图片...</span></div>';
-    try {
-      const data = await this.apiCall('/api/ai/image', { prompt: fullPrompt, engine, size });
-      if (data && data.url) {
-        resultEl.innerHTML = '<img src="' + data.url + '" alt="AI生成图片" style="max-width:100%;border-radius:8px">';
-        toast('图片生成完成！', 'success');
-        return;
-      }
-      if (engine === 'flux') {
-        const resp = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inputs: fullPrompt })
-        });
-        if (!resp.ok) throw new Error('Flux API 错误: ' + resp.status);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        resultEl.innerHTML = '<img src="' + url + '" alt="AI生成图片" style="max-width:100%;border-radius:8px">';
-        toast('图片生成完成！（Flux直连）', 'success');
-        return;
-      }
-      throw new Error('后端未启动，请先启动 server 目录下的 Node.js 服务');
-    } catch (err) {
-      resultEl.innerHTML = '<div class="gen-placeholder" style="color:var(--danger)">生成失败：' + Utils.esc(err.message) + '</div>';
-      toast('生成失败：' + err.message, 'error');
-    }
-  },
+function deleteTopic(id) {
+  appData.topics = appData.topics.filter(t => t.id !== id);
+  saveData(appData);
+  renderTopics();
+  refreshScriptTopicRef();
+  showToast('选题已删除', 'info');
+}
 
-  async generateVideo() {
-    const prompt = document.getElementById('video-prompt').value.trim();
-    if (!prompt) { toast('请输入视频描述', 'error'); return; }
-    const refImage = document.getElementById('video-ref-image').value.trim();
-    const duration = parseInt(document.getElementById('video-duration').value) || 10;
-    const resultEl = document.getElementById('video-result');
-    resultEl.innerHTML = '<div class="gen-loading"><div class="spinner"></div><span>视频生成中，通常需要2-5分钟...</span></div>';
-    try {
-      const data = await this.apiCall('/api/ai/video', { prompt, refImage, duration });
-      if (!data) throw new Error('后端未启动，请先启动 server 目录下的 Node.js 服务');
-      if (data.error) throw new Error(data.error);
-      const taskId = data.taskId;
-      toast('视频任务已提交，正在生成...', 'info');
-      for (let i = 0; i < 120; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        const pollResp = await fetch(this._apiBase + '/api/tasks/' + taskId);
-        const task = await pollResp.json();
-        if (task.status === 'done') {
-          resultEl.innerHTML = '<video src="' + task.result.url + '" controls style="max-width:100%;border-radius:8px"></video>';
-          toast('视频生成完成！', 'success');
-          return;
-        }
-        if (task.status === 'failed') throw new Error(task.error || '生成失败');
-      }
-      throw new Error('生成超时');
-    } catch (err) {
-      resultEl.innerHTML = '<div class="gen-placeholder" style="color:var(--danger)">生成失败：' + Utils.esc(err.message) + '</div>';
-      toast('生成失败：' + err.message, 'error');
-    }
-  },
+document.getElementById('btnAddTopic').addEventListener('click', addTopic);
+document.getElementById('topicInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') addTopic();
+});
 
-  async generateTTS() {
-    const text = document.getElementById('tts-text').value.trim();
-    if (!text) { toast('请输入台词文本', 'error'); return; }
-    const voice = document.getElementById('tts-voice').value;
-    const rate = document.getElementById('tts-rate').value;
-    const resultEl = document.getElementById('tts-result');
-    resultEl.innerHTML = '<div class="gen-loading"><div class="spinner"></div><span>正在生成配音...</span></div>';
-    try {
-      const data = await this.apiCall('/api/ai/tts', { text, voice, rate });
-      if (data && data.url) {
-        resultEl.innerHTML = '<div style="text-align:center;width:100%"><audio src="' + data.url + '" controls style="width:100%;margin-bottom:12px"></audio><p style="color:var(--text2);font-size:12px">文件: ' + data.filename + '</p></div>';
-        toast('配音生成完成！', 'success');
-        return;
-      }
-    } catch {}
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-CN';
-      utterance.rate = parseFloat(rate);
-      resultEl.innerHTML = '<div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">🔊</div><p style="color:var(--text2);margin-bottom:16px">使用浏览器内置语音</p><button class="btn-secondary" onclick="speechSynthesis.cancel()">停止</button> <button class="btn-secondary" onclick="speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('' + text.replace(/'/g, "\'") + ''))">重新播放</button></div>';
-      speechSynthesis.speak(utterance);
-      toast('浏览器配音已开始播放', 'success');
-    } else {
-      resultEl.innerHTML = '<div class="gen-placeholder" style="color:var(--danger)">TTS 不可用，请启动后端服务</div>';
-    }
-  },
+// =====================================================
+//  剧本台
+// =====================================================
 
-  async generateScript() {
-    const concept = document.getElementById('script-ai-concept').value.trim();
-    if (!concept) { toast('请输入量子概念', 'error'); return; }
-    const style = document.getElementById('script-ai-style').value;
-    const duration = document.getElementById('script-ai-duration').value;
-    const extra = document.getElementById('script-ai-extra').value.trim();
-    const resultEl = document.getElementById('script-ai-result');
-    resultEl.innerHTML = '<div class="gen-loading"><div class="spinner"></div><span>AI正在创作剧本...</span></div>';
-    try {
-      const data = await this.apiCall('/api/ai/script', { concept, style, duration, extra });
-      if (!data) throw new Error('后端未启动，请先启动 server 目录下的 Node.js 服务');
-      if (data.error) throw new Error(data.error);
-      resultEl.innerHTML = '<pre style="white-space:pre-wrap">' + Utils.esc(data.script) + '</pre>';
-      const saveBtn = document.createElement('div');
-      saveBtn.style.cssText = 'margin-top:16px;text-align:center';
-      saveBtn.innerHTML = '<button class="btn-primary" onclick="AIGen.saveScriptToDraft('' + Utils.esc(concept) + '', this)">💾 保存为剧本草稿</button>';
-      resultEl.appendChild(saveBtn);
-      resultEl.querySelector('.btn-primary')._scriptContent = data.script;
-      toast('剧本生成完成！', 'success');
-    } catch (err) {
-      resultEl.innerHTML = '<div class="gen-placeholder" style="color:var(--danger)">生成失败：' + Utils.esc(err.message) + '</div>';
-      toast('生成失败：' + err.message, 'error');
-    }
-  },
+function refreshScriptTopicRef() {
+  const select = document.getElementById('scriptTopicRef');
+  select.innerHTML = '<option value="">关联选题（可选）</option>' +
+    appData.topics.map(t => `<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
+}
 
-  saveScriptToDraft(concept, btn) {
-    const script = btn._scriptContent || btn.closest('.gen-result').querySelector('pre')?.textContent;
-    if (!script) return;
-    const item = {
-      id: Utils.id(),
-      title: concept + ' - AI生成',
-      epNum: (Scripts.getAll().length || 0) + 1,
-      concept: concept,
-      script: script,
-      duration: 90,
-      status: '初稿',
-      pubDate: '',
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    const list = Scripts.getAll();
-    list.unshift(item);
-    Scripts.save(list);
-    toast('已保存为剧本草稿', 'success');
+function renderScripts() {
+  const container = document.getElementById('scriptsList');
+  if (appData.scripts.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0;">暂无剧本，开始创作吧</p>';
+    return;
   }
-};
 
-
-/* ============================
-   Settings Module
-   ============================ */
-const Settings = {
-  async load() {
-    // Load from localStorage
-    const s = Store.get('settings') || {};
-    document.getElementById('set-llm-provider').value = s.llmProvider || 'openai';
-    document.getElementById('set-llm-key').value = s.llmKey || '';
-    document.getElementById('set-llm-base').value = s.llmBase || '';
-    document.getElementById('set-llm-model').value = s.llmModel || '';
-    document.getElementById('set-kling-key').value = s.klingKey || '';
-    document.getElementById('set-tongyi-key').value = s.tongyiKey || '';
-    document.getElementById('set-openai-key').value = s.openaiKey || '';
-    document.getElementById('set-kling-video-key').value = s.klingVideoKey || '';
-
-    // Also sync from backend
-    try {
-      const resp = await fetch('/api/config');
-      if (resp.ok) {
-        const cfg = await resp.json();
-        // Show backend status
-        if (cfg._hasLLMKey) document.getElementById('set-llm-key').placeholder = '已配置 (后端)';
-        if (cfg._hasKlingKey) document.getElementById('set-kling-key').placeholder = '已配置 (后端)';
-        if (cfg._hasTongyiKey) document.getElementById('set-tongyi-key').placeholder = '已配置 (后端)';
-        if (cfg._hasOpenaiKey) document.getElementById('set-openai-key').placeholder = '已配置 (后端)';
-        if (cfg._hasKlingVideoKey) document.getElementById('set-kling-video-key').placeholder = '已配置 (后端)';
-      }
-    } catch {}
-  },
-  async save() {
-    const s = {
-      llmProvider: document.getElementById('set-llm-provider').value,
-      llmKey: document.getElementById('set-llm-key').value,
-      llmBase: document.getElementById('set-llm-base').value,
-      llmModel: document.getElementById('set-llm-model').value,
-      klingKey: document.getElementById('set-kling-key').value,
-      tongyiKey: document.getElementById('set-tongyi-key').value,
-      openaiKey: document.getElementById('set-openai-key').value,
-      klingVideoKey: document.getElementById('set-kling-video-key').value
-    };
-    // Save to localStorage
-    Store.set('settings', s);
-    // Save to backend (only non-empty values)
-    try {
-      const backendCfg = {};
-      for (const [k, v] of Object.entries(s)) {
-        if (v && !v.includes('••')) backendCfg[k] = v;
-      }
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(backendCfg)
-      });
-    } catch {}
-    toast('设置已保存', 'success');
-  },
-  export() {
-    const data = {
-      topics: Store.get('topics') || [],
-      scripts: Store.get('scripts') || [],
-      characters: Store.get('characters') || [],
-      settings: Store.get('settings') || {},
-      exportedAt: new Date().toISOString()
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `quantum-studio-backup-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('数据已导出', 'success');
-  },
-  import(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const data = JSON.parse(e.target.result);
-        if (data.topics) Store.set('topics', data.topics);
-        if (data.scripts) Store.set('scripts', data.scripts);
-        if (data.characters) Store.set('characters', data.characters);
-        if (data.settings) Store.set('settings', data.settings);
-        toast('数据已导入，刷新页面生效', 'success');
-        setTimeout(() => location.reload(), 1000);
-      } catch { toast('文件格式错误', 'error'); }
-    };
-    reader.readAsText(file);
-  },
-  clearAll() {
-    if (!confirm('确定清空所有数据？此操作不可恢复！')) return;
-    if (!confirm('真的确定吗？')) return;
-    ['topics', 'scripts', 'characters', 'settings'].forEach(k => Store.remove(k));
-    toast('数据已清空，刷新中...');
-    setTimeout(() => location.reload(), 500);
-  },
-  async loadAssets() {
-    const el = document.getElementById('assets-list');
-    el.innerHTML = '<p class="empty-hint">加载中...</p>';
-    try {
-      const resp = await fetch('/api/assets');
-      const files = await resp.json();
-      if (files.length === 0) {
-        el.innerHTML = '<p class="empty-hint">暂无素材，使用AI生成功能后会出现在这里</p>';
-        return;
-      }
-      el.innerHTML = files.map(f => {
-        const isImg = /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name);
-        const isVid = /\.(mp4|webm|mov)$/i.test(f.name);
-        const isAud = /\.(mp3|wav|ogg|m4a)$/i.test(f.name);
-        const size = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + 'MB' : (f.size / 1024).toFixed(0) + 'KB';
-        let preview = '';
-        if (isImg) preview = `<img src="${f.url}" style="width:100%;height:120px;object-fit:cover;border-radius:6px;margin-bottom:8px">`;
-        else if (isVid) preview = `<div style="height:120px;background:var(--bg4);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;font-size:32px">🎬</div>`;
-        else if (isAud) preview = `<div style="height:120px;background:var(--bg4);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;font-size:32px">🔊</div>`;
-        else preview = `<div style="height:120px;background:var(--bg4);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;font-size:32px">📄</div>`;
-        return `
-          <div class="card" style="padding:12px">
-            ${preview}
-            <div class="card-title" style="font-size:12px;word-break:break-all">${Utils.esc(f.name)}</div>
-            <div class="card-meta">
-              <span class="tag tag-field">${size}</span>
-            </div>
-            <div style="margin-top:8px">
-              <a href="${f.url}" target="_blank" class="btn-sm" style="text-decoration:none;display:inline-block">查看</a>
-            </div>
+  container.innerHTML = appData.scripts.map(s => {
+    const topic = appData.topics.find(t => t.id === s.topicId);
+    const topicLabel = topic ? '关联选题：' + topic.title : '';
+    return `
+      <div class="wb-card" data-id="${s.id}">
+        <div style="display:flex;justify-content:space-between;align-items:start;">
+          <div>
+            <h4>${escapeHtml(s.title)}</h4>
+            <p>${topicLabel ? '<span style="color:var(--accent-cyan);font-size:0.8rem;">' + escapeHtml(topicLabel) + '</span>' : ''}</p>
+            <p style="white-space:pre-wrap;max-height:80px;overflow:hidden;font-size:0.8rem;color:var(--text-muted);">${escapeHtml(s.content.substring(0, 200))}${s.content.length > 200 ? '...' : ''}</p>
           </div>
-        `;
-      }).join('');
-    } catch (err) {
-      el.innerHTML = `<p class="empty-hint" style="color:var(--danger)">加载失败：${err.message}</p>`;
-    }
-  }
-};
+          <button class="wb-btn wb-btn-danger wb-btn-sm" onclick="deleteScript('${s.id}')">删除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
 
-/* === Init === */
-document.addEventListener('DOMContentLoaded', () => App.init());
+function addScript() {
+  const titleEl = document.getElementById('scriptTitle');
+  const contentEl = document.getElementById('scriptContent');
+  const topicRef = document.getElementById('scriptTopicRef');
+
+  const title = titleEl.value.trim();
+  const content = contentEl.value.trim();
+
+  if (!title) { showToast('请输入剧本标题', 'error'); return; }
+  if (!content) { showToast('请输入剧本内容', 'error'); return; }
+
+  appData.scripts.unshift({
+    id: genId(),
+    title,
+    topicId: topicRef.value || null,
+    content,
+    createdAt: Date.now()
+  });
+
+  saveData(appData);
+  renderScripts();
+  titleEl.value = '';
+  contentEl.value = '';
+  topicRef.value = '';
+  showToast('剧本已保存', 'success');
+}
+
+function deleteScript(id) {
+  appData.scripts = appData.scripts.filter(s => s.id !== id);
+  saveData(appData);
+  renderScripts();
+  showToast('剧本已删除', 'info');
+}
+
+document.getElementById('btnAddScript').addEventListener('click', addScript);
+
+// =====================================================
+//  角色库
+// =====================================================
+
+function renderRoles() {
+  const container = document.getElementById('rolesList');
+  if (appData.roles.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0;">暂无角色，创建你的第一个角色吧</p>';
+    return;
+  }
+
+  container.innerHTML = appData.roles.map(r => `
+    <div class="wb-card" data-id="${r.id}">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div>
+          <h4>🎭 ${escapeHtml(r.name)}</h4>
+          <p>${escapeHtml(r.traits)}</p>
+        </div>
+        <button class="wb-btn wb-btn-danger wb-btn-sm" onclick="deleteRole('${r.id}')">删除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addRole() {
+  const nameEl = document.getElementById('roleName');
+  const traitsEl = document.getElementById('roleTraits');
+  const name = nameEl.value.trim();
+  const traits = traitsEl.value.trim();
+
+  if (!name) { showToast('请输入角色名称', 'error'); return; }
+
+  appData.roles.unshift({
+    id: genId(),
+    name,
+    traits: traits || '待补充',
+    createdAt: Date.now()
+  });
+
+  saveData(appData);
+  renderRoles();
+  nameEl.value = '';
+  traitsEl.value = '';
+  showToast('角色已添加', 'success');
+}
+
+function deleteRole(id) {
+  appData.roles = appData.roles.filter(r => r.id !== id);
+  saveData(appData);
+  renderRoles();
+  showToast('角色已删除', 'info');
+}
+
+document.getElementById('btnAddRole').addEventListener('click', addRole);
+document.getElementById('roleName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') addRole();
+});
+
+// =====================================================
+//  AI 生成面板
+// =====================================================
+
+document.querySelectorAll('.ai-gen-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const genType = card.getAttribute('data-gen');
+    const genResult = document.getElementById('genResult');
+    const messages = {
+      image: '🖼 AI 图片生成已就绪 —— 输入提示词描述你想要的画面风格与内容，AI 将为你生成概念图。',
+      video: '🎥 AI 视频生成已就绪 —— 上传参考图或输入场景描述，AI 将生成短视频片段。',
+      voice: '🎙 AI 配音已就绪 —— 输入文本并选择语种与风格，AI 将合成高质量配音。',
+      script: '📜 AI 剧本续写已就绪 —— 粘贴已有剧本片段，AI 将智能扩展剧情发展。'
+    };
+
+    let html = `<div class="wb-card"><p>${messages[genType]}</p>`;
+    html += `<div style="margin-top:12px;"><textarea class="wb-textarea" id="genPrompt" placeholder="输入你的提示词或内容..." style="min-height:80px;"></textarea></div>`;
+    html += `<button class="wb-btn wb-btn-primary" style="margin-top:8px;" onclick="simulateGenerate('${genType}')">生成</button>`;
+    html += `<div id="genOutput" style="margin-top:12px;"></div></div>`;
+    genResult.innerHTML = html;
+  });
+});
+
+function simulateGenerate(genType) {
+  const prompt = document.getElementById('genPrompt')?.value.trim();
+  if (!prompt) { showToast('请输入提示词或内容', 'error'); return; }
+
+  const output = document.getElementById('genOutput');
+  output.innerHTML = `
+    <div style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:8px;padding:16px;margin-top:8px;">
+      <p style="color:var(--accent-cyan);font-family:var(--font-mono);font-size:0.8rem;">[${genType.toUpperCase()} 生成结果]</p>
+      <p style="margin-top:8px;color:var(--text-secondary);font-style:italic;">
+        基于提示词 "${escapeHtml(prompt)}" 的 AI 生成内容将在此展示。在实际部署中，此处将连接后端 API 返回真实的生成结果。
+      </p>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">提示词长度：${prompt.length} 字符</p>
+    </div>
+  `;
+  showToast('生成请求已提交（演示模式）', 'info');
+}
+
+// =====================================================
+//  看板拖拽
+// =====================================================
+
+function renderKanban() {
+  ['todo', 'doing', 'done'].forEach(status => {
+    const container = document.getElementById('kanban-' + status);
+    const items = appData.kanban[status] || [];
+    container.innerHTML = items.map(item => `
+      <div class="kanban-item" draggable="true" data-id="${item.id}" data-status="${status}">
+        <strong>${escapeHtml(item.title)}</strong>
+        <div class="item-meta">${escapeHtml(item.desc || '')}</div>
+      </div>
+    `).join('');
+
+    if (items.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;text-align:center;padding:20px 0;">拖放任务到此</p>';
+    }
+  });
+
+  // 绑定拖拽事件
+  document.querySelectorAll('.kanban-item').forEach(item => {
+    item.addEventListener('dragstart', handleDragStart);
+    item.addEventListener('dragend', handleDragEnd);
+  });
+
+  document.querySelectorAll('.kanban-col').forEach(col => {
+    col.addEventListener('dragover', handleDragOver);
+    col.addEventListener('drop', handleDrop);
+  });
+}
+
+let draggedItem = null;
+
+function handleDragStart(e) {
+  draggedItem = this;
+  this.style.opacity = '0.5';
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+  this.style.opacity = '1';
+  draggedItem = null;
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  if (!draggedItem) return;
+
+  const fromStatus = draggedItem.getAttribute('data-status');
+  const itemId = draggedItem.getAttribute('data-id');
+
+  // 找到目标列
+  const col = e.target.closest('.kanban-col');
+  if (!col) return;
+  const toStatus = col.getAttribute('data-status');
+
+  if (fromStatus === toStatus) return;
+
+  // 移动数据
+  const itemIndex = appData.kanban[fromStatus].findIndex(i => i.id === itemId);
+  if (itemIndex === -1) return;
+  const [item] = appData.kanban[fromStatus].splice(itemIndex, 1);
+  appData.kanban[toStatus].push(item);
+
+  saveData(appData);
+  renderKanban();
+  showToast('任务已移动', 'success');
+}
+
+// 添加看板任务（快速入口）
+function addKanbanItem(status) {
+  const title = prompt('输入任务标题：');
+  if (!title || !title.trim()) return;
+  appData.kanban[status].push({
+    id: genId(),
+    title: title.trim(),
+    desc: ''
+  });
+  saveData(appData);
+  renderKanban();
+}
+
+// 双击看板任务编辑
+document.getElementById('kanbanBoard').addEventListener('dblclick', (e) => {
+  const item = e.target.closest('.kanban-item');
+  if (!item) return;
+  const id = item.getAttribute('data-id');
+  const status = item.getAttribute('data-status');
+  const task = appData.kanban[status].find(t => t.id === id);
+  if (!task) return;
+
+  const newTitle = prompt('编辑任务标题：', task.title);
+  if (newTitle !== null && newTitle.trim()) {
+    task.title = newTitle.trim();
+    saveData(appData);
+    renderKanban();
+  }
+});
+
+// =====================================================
+//  发布日历
+// =====================================================
+
+let calendarYear, calendarMonth;
+
+function renderCalendar(year, month) {
+  calendarYear = year;
+  calendarMonth = month;
+
+  const label = document.getElementById('calendarMonthLabel');
+  label.textContent = year + '年 ' + String(month + 1).padStart(2, '0') + '月';
+
+  const grid = document.getElementById('calendarGrid');
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay(); // 0=周日
+
+  const headers = ['日', '一', '二', '三', '四', '五', '六'];
+  let html = headers.map(h => `<div class="calendar-header">${h}</div>`).join('');
+
+  // 填充空白
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="calendar-day" style="opacity:0.25;"></div>';
+  }
+
+  const today = new Date();
+  const todayKey = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const hasEvent = appData.events[dateKey] && appData.events[dateKey].length > 0;
+    const isToday = dateKey === todayKey;
+    html += `<div class="calendar-day${hasEvent ? ' has-event' : ''}${isToday ? ' today' : ''}" data-date="${dateKey}">${d}</div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // 点击日期添加事件
+  grid.querySelectorAll('.calendar-day[data-date]').forEach(day => {
+    day.addEventListener('click', () => {
+      const dateKey = day.getAttribute('data-date');
+      const evt = prompt('为 ' + dateKey + ' 添加事件：');
+      if (evt !== null && evt.trim()) {
+        if (!appData.events[dateKey]) appData.events[dateKey] = [];
+        appData.events[dateKey].push(evt.trim());
+        saveData(appData);
+        renderCalendar(year, month);
+        showToast('事件已添加', 'success');
+      }
+    });
+  });
+}
+
+document.getElementById('btnPrevMonth').addEventListener('click', () => {
+  if (calendarMonth === 0) {
+    renderCalendar(calendarYear - 1, 11);
+  } else {
+    renderCalendar(calendarYear, calendarMonth - 1);
+  }
+});
+
+document.getElementById('btnNextMonth').addEventListener('click', () => {
+  if (calendarMonth === 11) {
+    renderCalendar(calendarYear + 1, 0);
+  } else {
+    renderCalendar(calendarYear, calendarMonth + 1);
+  }
+});
+
+// =====================================================
+//  设置 — 导入导出
+// =====================================================
+
+document.getElementById('btnExportData').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'quantum-studio-data-' + new Date().toISOString().split('T')[0] + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('数据已导出', 'success');
+});
+
+document.getElementById('btnImportData').addEventListener('click', () => {
+  document.getElementById('importFileInput').click();
+});
+
+document.getElementById('importFileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      // 基本验证
+      if (!data.topics || !data.scripts || !data.roles || !data.kanban) {
+        throw new Error('数据格式不完整');
+      }
+      appData = data;
+      saveData(appData);
+      refreshAllPanels();
+      showToast('数据已导入', 'success');
+    } catch (err) {
+      showToast('导入失败：文件格式不正确', 'error');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('btnClearData').addEventListener('click', () => {
+  if (confirm('确定清除所有工作台数据吗？此操作不可恢复。')) {
+    appData = getDefaultData();
+    saveData(appData);
+    refreshAllPanels();
+    showToast('数据已清除并重置为默认', 'info');
+  }
+});
+
+// =====================================================
+//  全局刷新
+// =====================================================
+
+function refreshAllPanels() {
+  renderTopics();
+  renderScripts();
+  renderRoles();
+  renderKanban();
+  refreshScriptTopicRef();
+  const now = new Date();
+  renderCalendar(now.getFullYear(), now.getMonth());
+}
+
+// =====================================================
+//  联系表单
+// =====================================================
+
+document.getElementById('contactForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = document.getElementById('contactName').value.trim();
+  const email = document.getElementById('contactEmail').value.trim();
+  const message = document.getElementById('contactMessage').value.trim();
+
+  // 前端验证
+  if (!name) { showToast('请输入姓名', 'error'); return; }
+  if (!email) { showToast('请输入邮箱', 'error'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showToast('请输入有效的邮箱地址', 'error'); return;
+  }
+  if (!message) { showToast('请输入留言内容', 'error'); return; }
+
+  const feedback = document.getElementById('contactFeedback');
+  feedback.innerHTML = '<span style="color:var(--accent-green);">消息已发送！我们会尽快回复你。（演示模式）</span>';
+  showToast('消息发送成功！', 'success');
+  document.getElementById('contactForm').reset();
+
+  setTimeout(() => {
+    feedback.innerHTML = '';
+  }, 5000);
+});
+
+// =====================================================
+//  工具函数
+// =====================================================
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// =====================================================
+//  初始化
+// =====================================================
+
+function init() {
+  renderTopics();
+  renderScripts();
+  renderRoles();
+  renderKanban();
+  refreshScriptTopicRef();
+
+  const now = new Date();
+  renderCalendar(now.getFullYear(), now.getMonth());
+}
+
+init();
+console.log('%c⚛ 量子事务所 Quantum Studio %c已就绪',
+  'color:#00d4ff;font-size:1.2rem;font-weight:700;',
+  'color:#a0a0b8;');
+console.log('%c量子灵感 × AI 创作 %c| %c以量子之眼洞察创意，用 AI 之手塑造未来影像',
+  'color:#7c3aed;', 'color:#a0a0b8;', 'color:#6a6a80;font-style:italic;');

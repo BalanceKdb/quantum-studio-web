@@ -1,432 +1,355 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>量子事务所 · AI短剧工作台</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>量子事务所 | Quantum Studio — 量子灵感 × AI 创作</title>
+  <meta name="description" content="量子事务所是一个结合量子科技美学与 AI 短剧创作的先锋工作室。以量子之眼洞察创意，用 AI 之手塑造未来影像。">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-<div id="app">
-  <!-- 侧边栏 -->
-  <nav class="sidebar">
-    <div class="logo">
-      <div class="logo-icon">⚛</div>
-      <div class="logo-text">量子事务所</div>
-      <div class="logo-sub">AI短剧工作台</div>
+
+  <!-- ===== Canvas 粒子背景 ===== -->
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- ===== 导航栏 ===== -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <a href="#hero" class="nav-logo">
+        <span class="logo-icon">⚛</span>
+        <span>量子事务所</span>
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#hero" class="active">首页</a></li>
+        <li><a href="#about">关于</a></li>
+        <li><a href="#services">服务</a></li>
+        <li><a href="#workbench">AI工作台</a></li>
+        <li><a href="#cases">案例</a></li>
+        <li><a href="#contact">联系我们</a></li>
+      </ul>
+      <button class="menu-toggle" id="menuToggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
     </div>
-    <ul class="nav-list">
-      <li class="nav-item active" data-page="dashboard">
-        <span class="nav-icon">📊</span><span class="nav-label">工作台</span>
-      </li>
-      <li class="nav-item" data-page="topics">
-        <span class="nav-icon">💡</span><span class="nav-label">选题库</span>
-      </li>
-      <li class="nav-item" data-page="scripts">
-        <span class="nav-icon">📝</span><span class="nav-label">剧本台</span>
-      </li>
-      <li class="nav-item" data-page="characters">
-        <span class="nav-icon">👤</span><span class="nav-label">角色库</span>
-      </li>
-      <li class="nav-item" data-page="prompts">
-        <span class="nav-icon">🎨</span><span class="nav-label">AI生成</span>
-      </li>
-      <li class="nav-item" data-page="kanban">
-        <span class="nav-icon">📋</span><span class="nav-label">制作看板</span>
-      </li>
-      <li class="nav-item" data-page="calendar">
-        <span class="nav-icon">📅</span><span class="nav-label">发布日历</span>
-      </li>
-      <li class="nav-item" data-page="settings">
-        <span class="nav-icon">⚙️</span><span class="nav-label">设置</span>
-      </li>
-    </ul>
   </nav>
 
-  <!-- 主内容区 -->
-  <main class="main-content">
-    <!-- 工作台首页 -->
-    <section class="page active" id="page-dashboard">
-      <div class="page-header">
-        <h1>工作台</h1>
-        <p class="subtitle">量子事务所 · AI短剧一体化制作平台</p>
+  <!-- ===== Hero 区段 ===== -->
+  <section class="hero" id="hero">
+    <div class="hero-content">
+      <div class="hero-badge">QUANTUM STUDIO</div>
+      <h1 class="hero-title">量子事务所</h1>
+      <p class="hero-subtitle">Quantum Studio — 量子灵感 × AI 创作</p>
+      <p class="hero-tagline">以量子之眼洞察创意，用 AI 之手塑造未来影像</p>
+      <div class="hero-buttons">
+        <a href="#services" class="btn btn-primary">探索我们的服务</a>
+        <a href="#workbench" class="btn btn-outline">进入 AI 工作台</a>
       </div>
-      <div class="dashboard-stats">
-        <div class="stat-card">
-          <div class="stat-number" id="stat-topics">0</div>
-          <div class="stat-label">选题储备</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number" id="stat-scripts">0</div>
-          <div class="stat-label">剧本数量</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number" id="stat-episodes">0</div>
-          <div class="stat-label">已发布集数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number" id="stat-characters">0</div>
-          <div class="stat-label">角色数量</div>
-        </div>
-      </div>
-      <div class="dashboard-grid">
-        <div class="dashboard-card">
-          <h3>🚀 快速开始</h3>
-          <div class="quick-actions">
-            <button class="action-btn" onclick="App.navigate('topics')">+ 新建选题</button>
-            <button class="action-btn" onclick="App.navigate('scripts')">+ 新建剧本</button>
-            <button class="action-btn" onclick="App.navigate('prompts')">🎨 AI生成</button>
-            <button class="action-btn" onclick="App.navigate('kanban')">📋 看板</button>
-          </div>
-        </div>
-        <div class="dashboard-card">
-          <h3>📈 最近动态</h3>
-          <div id="recent-activity" class="activity-list">
-            <p class="empty-hint">暂无动态，开始创建你的第一个选题吧</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 选题库 -->
-    <section class="page" id="page-topics">
-      <div class="page-header">
-        <h1>💡 选题库</h1>
-        <button class="btn-primary" onclick="Topics.showAdd()">+ 新建选题</button>
-      </div>
-      <div class="filter-bar">
-        <select id="topic-filter-status" onchange="Topics.render()">
-          <option value="all">全部状态</option>
-          <option value="待用">待用</option>
-          <option value="已用">已用</option>
-          <option value="储备">储备</option>
-        </select>
-        <select id="topic-filter-field" onchange="Topics.render()">
-          <option value="all">全部领域</option>
-          <option value="量子力学基础">量子力学基础</option>
-          <option value="量子信息">量子信息</option>
-          <option value="量子场论">量子场论</option>
-          <option value="量子光学">量子光学</option>
-          <option value="量子计算">量子计算</option>
-          <option value="其他">其他</option>
-        </select>
-        <input type="text" id="topic-search" placeholder="搜索概念..." oninput="Topics.render()">
-      </div>
-      <div id="topics-list" class="card-grid"></div>
-    </section>
-
-    <!-- 剧本台 -->
-    <section class="page" id="page-scripts">
-      <div class="page-header">
-        <h1>📝 剧本台</h1>
-        <button class="btn-primary" onclick="Scripts.showAdd()">+ 新建剧本</button>
-      </div>
-      <div class="filter-bar">
-        <select id="script-filter-status" onchange="Scripts.render()">
-          <option value="all">全部状态</option>
-          <option value="构思中">构思中</option>
-          <option value="初稿">初稿</option>
-          <option value="定稿">定稿</option>
-          <option value="已制作">已制作</option>
-          <option value="已发布">已发布</option>
-        </select>
-      </div>
-      <div id="scripts-list" class="card-grid"></div>
-    </section>
-
-    <!-- 角色库 -->
-    <section class="page" id="page-characters">
-      <div class="page-header">
-        <h1>👤 角色库</h1>
-        <button class="btn-primary" onclick="Characters.showAdd()">+ 新建角色</button>
-      </div>
-      <div id="characters-list" class="card-grid"></div>
-    </section>
-
-    <!-- AI生成 -->
-    <section class="page" id="page-prompts">
-      <div class="page-header">
-        <h1>🎨 AI生成</h1>
-      </div>
-      <div class="ai-tabs">
-        <button class="ai-tab active" data-tab="img-gen">图片生成</button>
-        <button class="ai-tab" data-tab="video-gen">视频生成</button>
-        <button class="ai-tab" data-tab="tts-gen">配音生成</button>
-        <button class="ai-tab" data-tab="script-ai">AI写剧本</button>
-      </div>
-      <!-- 图片生成 -->
-      <div class="ai-panel active" id="panel-img-gen">
-        <div class="ai-gen-layout">
-          <div class="ai-gen-controls">
-            <div class="form-group">
-              <label>画面描述</label>
-              <textarea id="img-prompt" rows="4" placeholder="描述你想要的画面，例如：赛博朋克风格的量子事务所内部，霓虹灯光，暗色调..."></textarea>
-            </div>
-            <div class="form-group">
-              <label>生成引擎</label>
-              <select id="img-engine">
-                <option value="kling">可灵 AI</option>
-                <option value="tongyi">通义万相</option>
-                <option value="flux">Flux (免费)</option>
-                <option value="dalle">DALL·E 3</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>尺寸</label>
-              <select id="img-size">
-                <option value="1024x1024">1:1 正方形</option>
-                <option value="1280x720">16:9 横屏</option>
-                <option value="720x1280">9:16 竖屏</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>风格前缀（自动添加）</label>
-              <input type="text" id="img-style-prefix" value="cinematic, cyberpunk style, dark moody lighting, quantum physics aesthetic,">
-            </div>
-            <button class="btn-primary btn-generate" onclick="AIGen.generateImage()">🎨 生成图片</button>
-          </div>
-          <div class="ai-gen-preview">
-            <div id="img-result" class="gen-result">
-              <div class="gen-placeholder">生成的图片将显示在这里</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- 视频生成 -->
-      <div class="ai-panel" id="panel-video-gen">
-        <div class="ai-gen-layout">
-          <div class="ai-gen-controls">
-            <div class="form-group">
-              <label>视频描述</label>
-              <textarea id="video-prompt" rows="4" placeholder="描述视频内容和运动，例如：镜头从量子事务所大门缓缓推进..."></textarea>
-            </div>
-            <div class="form-group">
-              <label>参考图片（可选）</label>
-              <input type="text" id="video-ref-image" placeholder="图片URL或从图片生成结果中获取">
-            </div>
-            <div class="form-group">
-              <label>时长</label>
-              <select id="video-duration">
-                <option value="5">5秒</option>
-                <option value="10" selected>10秒</option>
-              </select>
-            </div>
-            <button class="btn-primary btn-generate" onclick="AIGen.generateVideo()">🎬 生成视频</button>
-          </div>
-          <div class="ai-gen-preview">
-            <div id="video-result" class="gen-result">
-              <div class="gen-placeholder">生成的视频将显示在这里</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- 配音生成 -->
-      <div class="ai-panel" id="panel-tts-gen">
-        <div class="ai-gen-layout">
-          <div class="ai-gen-controls">
-            <div class="form-group">
-              <label>台词文本</label>
-              <textarea id="tts-text" rows="4" placeholder="输入需要配音的台词..."></textarea>
-            </div>
-            <div class="form-group">
-              <label>角色</label>
-              <select id="tts-voice">
-                <option value="zh-CN-YunxiNeural">所长（云希 - 沉稳男声）</option>
-                <option value="zh-CN-XiaoxiaoNeural">新人（晓晓 - 清澈女声）</option>
-                <option value="zh-CN-YunjianNeural">AI助手（云健 - 科技感男声）</option>
-                <option value="zh-CN-XiaoyiNeural">旁白（晓艺 - 温柔女声）</option>
-                <option value="zh-CN-YunyangNeural">新闻播报（云扬 - 专业男声）</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>语速</label>
-              <input type="range" id="tts-rate" min="0.5" max="2" step="0.1" value="1">
-              <span id="tts-rate-val">1.0x</span>
-            </div>
-            <button class="btn-primary btn-generate" onclick="AIGen.generateTTS()">🔊 生成配音</button>
-          </div>
-          <div class="ai-gen-preview">
-            <div id="tts-result" class="gen-result">
-              <div class="gen-placeholder">生成的音频将显示在这里</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- AI写剧本 -->
-      <div class="ai-panel" id="panel-script-ai">
-        <div class="ai-gen-layout">
-          <div class="ai-gen-controls">
-            <div class="form-group">
-              <label>量子概念</label>
-              <input type="text" id="script-ai-concept" placeholder="例如：量子纠缠、叠加态、量子隧穿">
-            </div>
-            <div class="form-group">
-              <label>剧情风格</label>
-              <select id="script-ai-style">
-                <option value="detective">悬疑探案</option>
-                <option value="scifi">科幻冒险</option>
-                <option value="comedy">轻松喜剧</option>
-                <option value="emotional">温情感动</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>时长</label>
-              <select id="script-ai-duration">
-                <option value="60">60秒</option>
-                <option value="90" selected>90秒</option>
-                <option value="120">120秒</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>额外要求（可选）</label>
-              <textarea id="script-ai-extra" rows="2" placeholder="例如：需要一个反转结尾，角色要幽默..."></textarea>
-            </div>
-            <button class="btn-primary btn-generate" onclick="AIGen.generateScript()">✍️ AI生成剧本</button>
-          </div>
-          <div class="ai-gen-preview">
-            <div id="script-ai-result" class="gen-result">
-              <div class="gen-placeholder">AI生成的剧本将显示在这里</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 制作看板 -->
-    <section class="page" id="page-kanban">
-      <div class="page-header">
-        <h1>📋 制作看板</h1>
-      </div>
-      <div class="kanban-board" id="kanban-board">
-        <div class="kanban-column" data-status="剧本">
-          <div class="kanban-col-header">📝 剧本 <span class="count">0</span></div>
-          <div class="kanban-cards" id="kanban-剧本"></div>
-        </div>
-        <div class="kanban-column" data-status="生图">
-          <div class="kanban-col-header">🎨 生图 <span class="count">0</span></div>
-          <div class="kanban-cards" id="kanban-生图"></div>
-        </div>
-        <div class="kanban-column" data-status="生视频">
-          <div class="kanban-col-header">🎬 生视频 <span class="count">0</span></div>
-          <div class="kanban-cards" id="kanban-生视频"></div>
-        </div>
-        <div class="kanban-column" data-status="配音">
-          <div class="kanban-col-header">🔊 配音 <span class="count">0</span></div>
-          <div class="kanban-cards" id="kanban-配音"></div>
-        </div>
-        <div class="kanban-column" data-status="剪辑">
-          <div class="kanban-col-header">✂️ 剪辑 <span class="count">0</span></div>
-          <div class="kanban-cards" id="kanban-剪辑"></div>
-        </div>
-        <div class="kanban-column" data-status="已发布">
-          <div class="kanban-col-header">✅ 已发布 <span class="count">0</span></div>
-          <div class="kanban-cards" id="kanban-已发布"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 发布日历 -->
-    <section class="page" id="page-calendar">
-      <div class="page-header">
-        <h1>📅 发布日历</h1>
-        <div class="calendar-nav">
-          <button onclick="Calendar.prevMonth()">◀</button>
-          <span id="calendar-title"></span>
-          <button onclick="Calendar.nextMonth()">▶</button>
-        </div>
-      </div>
-      <div class="calendar-grid" id="calendar-grid"></div>
-    </section>
-
-    <!-- 设置 -->
-    <section class="page" id="page-settings">
-      <div class="page-header">
-        <h1>⚙️ 设置</h1>
-        <button class="btn-secondary" onclick="Settings.export()">📦 导出数据</button>
-      </div>
-      <div class="settings-sections">
-        <div class="settings-group">
-          <h3>🤖 AI 模型（剧本生成）</h3>
-          <div class="form-group">
-            <label>服务提供商</label>
-            <select id="set-llm-provider">
-              <option value="openai">OpenAI (GPT)</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="qwen">通义千问</option>
-              <option value="custom">自定义</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>API Key</label>
-            <input type="password" id="set-llm-key" placeholder="sk-...">
-          </div>
-          <div class="form-group">
-            <label>API Base URL（自定义时填写）</label>
-            <input type="text" id="set-llm-base" placeholder="https://api.example.com/v1">
-          </div>
-          <div class="form-group">
-            <label>模型名称</label>
-            <input type="text" id="set-llm-model" placeholder="gpt-4o / deepseek-chat / qwen-plus">
-          </div>
-        </div>
-        <div class="settings-group">
-          <h3>🎨 图片生成</h3>
-          <div class="form-group">
-            <label>可灵 AI API Key</label>
-            <input type="password" id="set-kling-key" placeholder="可灵 API Key">
-          </div>
-          <div class="form-group">
-            <label>通义万相 API Key</label>
-            <input type="password" id="set-tongyi-key" placeholder="通义万相 API Key">
-          </div>
-          <div class="form-group">
-            <label>OpenAI API Key（DALL·E）</label>
-            <input type="password" id="set-openai-key" placeholder="sk-...">
-          </div>
-        </div>
-        <div class="settings-group">
-          <h3>🎬 视频生成</h3>
-          <div class="form-group">
-            <label>可灵视频 API Key</label>
-            <input type="password" id="set-kling-video-key" placeholder="可灵视频 API Key">
-          </div>
-        </div>
-        <div class="settings-group">
-          <h3>💾 数据管理</h3>
-          <div class="form-row">
-            <button class="btn-secondary" onclick="Settings.export()">导出全部数据</button>
-            <button class="btn-secondary" onclick="document.getElementById('import-file').click()">导入数据</button>
-            <input type="file" id="import-file" accept=".json" style="display:none" onchange="Settings.import(event)">
-            <button class="btn-danger" onclick="Settings.clearAll()">清空所有数据</button>
-          </div>
-        </div>
-        <div class="settings-group">
-          <h3>🖼️ 生成素材库</h3>
-          <p style="color:var(--text2);font-size:13px;margin-bottom:12px">AI生成的图片、视频、音频文件</p>
-          <button class="btn-secondary" onclick="Settings.loadAssets()" style="margin-bottom:12px">🔄 刷新素材列表</button>
-          <div id="assets-list" class="card-grid"></div>
-        </div>
-        <button class="btn-primary" onclick="Settings.save()">💾 保存设置</button>
-      </div>
-    </section>
-  </main>
-</div>
-
-<!-- 通用模态框 -->
-<div class="modal-overlay" id="modal-overlay" onclick="Modal.close()">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <h2 id="modal-title"></h2>
-      <button class="modal-close" onclick="Modal.close()">✕</button>
     </div>
-    <div class="modal-body" id="modal-body"></div>
-    <div class="modal-footer" id="modal-footer"></div>
-  </div>
-</div>
+  </section>
 
-<!-- Toast -->
-<div id="toast-container"></div>
+  <!-- ===== 关于我们 ===== -->
+  <section class="section about" id="about">
+    <div class="container">
+      <h2 class="section-title reveal">关于量子事务所</h2>
+      <p class="section-subtitle reveal">前沿 AI 创意工作室，量子美学驱动内容革命</p>
+      <p class="about-text reveal">
+        我们是前沿 AI 创意工作室，专注于短剧、短视频及数字内容创作。以量子物理的美学理念为灵感——不确定性即可能、纠缠即联结、叠加即多元——我们探索创意表达的无限维度。结合最先进的 AI 生成技术，从剧本构思到视觉呈现，从角色塑造到声音设计，量子事务所致力于重新定义数字内容生产的未来范式，让每一个想法都能以最高效、最具想象力的方式转化为令人惊叹的影像作品。
+      </p>
+      <div class="values-grid">
+        <div class="value-card reveal">
+          <div class="value-icon">⊗</div>
+          <h3>量子思维</h3>
+          <p>跳出经典因果的线性牢笼，以叠加态视角审视每一个创意。不设限、不落窠臼，在不确定性的海洋中发现确定的惊艳。</p>
+        </div>
+        <div class="value-card reveal">
+          <div class="value-icon">⟩</div>
+          <h3>AI 驱动</h3>
+          <p>以最前沿生成式 AI 为引擎，将文字化为画面，将灵感炼成影像。技术不是冰冷的工具，而是创意的量子加速器。</p>
+        </div>
+        <div class="value-card reveal">
+          <div class="value-icon">✦</div>
+          <h3>创意至上</h3>
+          <p>无论技术如何演进，动人的故事、深刻的洞察和独特的审美始终是我们的北极星。内容为王，创意永恒。</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<script src="app.js"></script>
+  <!-- ===== 服务展示 ===== -->
+  <section class="section services" id="services">
+    <div class="container">
+      <h2 class="section-title reveal">我们的服务</h2>
+      <p class="section-subtitle reveal">六大核心能力，覆盖 AI 创意全链路</p>
+      <div class="services-grid">
+        <div class="service-card reveal">
+          <div class="service-icon">🎬</div>
+          <h3>AI 短剧创作</h3>
+          <p>从选题策划到成片交付的一站式 AI 辅助制作，涵盖剧本生成、分镜设计、视频合成全流程。</p>
+        </div>
+        <div class="service-card reveal">
+          <div class="service-icon">⚛</div>
+          <h3>量子概念科普视频</h3>
+          <p>将硬核物理转化为柔软、可视化的叙事。量子纠缠、叠加态、隧穿效应……让科学变得触手可及。</p>
+        </div>
+        <div class="service-card reveal">
+          <div class="service-icon">🤖</div>
+          <h3>数字人播报</h3>
+          <p>AI 数字人主播 24/7 在线，口型同步、情感驱动，适用于新闻播报、知识讲解、品牌代言等场景。</p>
+        </div>
+        <div class="service-card reveal">
+          <div class="service-icon">🎨</div>
+          <h3>品牌视觉设计</h3>
+          <p>以量子美学为核心设计语言，打造独特的品牌视觉识别系统——LOGO、VI、动态视觉、3D 场景。</p>
+        </div>
+        <div class="service-card reveal">
+          <div class="service-icon">🎵</div>
+          <h3>AI 配音配乐</h3>
+          <p>多语种、多风格智能配音与原创配乐生成。从磁性男声到温柔女声，从史诗交响到电子氛围，应有尽有。</p>
+        </div>
+        <div class="service-card reveal">
+          <div class="service-icon">💡</div>
+          <h3>创意咨询</h3>
+          <p>用 AI 打开内容创作新维度。我们为品牌、机构和个人提供 AI 驱动的创意策略咨询与落地执行方案。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== AI 工作台 ===== -->
+  <section class="section workbench" id="workbench">
+    <div class="container">
+      <h2 class="section-title reveal">AI 工作台</h2>
+      <p class="section-subtitle reveal">选题 · 剧本 · 角色 · 生成 · 看板 · 发布</p>
+      <div class="workbench-wrapper reveal">
+        <div class="workbench-tabs" id="workbenchTabs">
+          <button class="workbench-tab active" data-panel="panel-topics">📋 选题库</button>
+          <button class="workbench-tab" data-panel="panel-scripts">📝 剧本台</button>
+          <button class="workbench-tab" data-panel="panel-roles">🎭 角色库</button>
+          <button class="workbench-tab" data-panel="panel-generate">✨ AI生成</button>
+          <button class="workbench-tab" data-panel="panel-kanban">📌 看板</button>
+          <button class="workbench-tab" data-panel="panel-calendar">📅 发布日历</button>
+          <button class="workbench-tab" data-panel="panel-settings">⚙ 设置</button>
+        </div>
+        <div class="workbench-content" id="workbenchContent">
+          <!-- 选题库 -->
+          <div class="workbench-panel active" id="panel-topics">
+            <div class="wb-row">
+              <div class="wb-col"><input class="wb-input" id="topicInput" placeholder="输入新选题..."></div>
+              <div class="wb-col"><input class="wb-input" id="topicGenre" placeholder="类型标签（如：科幻、悬疑）"></div>
+              <div><button class="wb-btn wb-btn-primary" id="btnAddTopic">+ 添加选题</button></div>
+            </div>
+            <div id="topicsList"></div>
+          </div>
+          <!-- 剧本台 -->
+          <div class="workbench-panel" id="panel-scripts">
+            <div class="wb-row">
+              <div class="wb-col"><input class="wb-input" id="scriptTitle" placeholder="剧本标题"></div>
+              <div class="wb-col">
+                <select class="wb-select" id="scriptTopicRef">
+                  <option value="">关联选题（可选）</option>
+                </select>
+              </div>
+            </div>
+            <textarea class="wb-textarea" id="scriptContent" placeholder="在此撰写剧本内容..." style="margin-bottom:12px;"></textarea>
+            <button class="wb-btn wb-btn-primary" id="btnAddScript">+ 保存剧本</button>
+            <div id="scriptsList" style="margin-top:24px;"></div>
+          </div>
+          <!-- 角色库 -->
+          <div class="workbench-panel" id="panel-roles">
+            <div class="wb-row">
+              <div class="wb-col"><input class="wb-input" id="roleName" placeholder="角色名称"></div>
+              <div class="wb-col"><input class="wb-input" id="roleTraits" placeholder="性格/特征"></div>
+              <div><button class="wb-btn wb-btn-primary" id="btnAddRole">+ 添加角色</button></div>
+            </div>
+            <div id="rolesList"></div>
+          </div>
+          <!-- AI 生成 -->
+          <div class="workbench-panel" id="panel-generate">
+            <div class="ai-generate-panel">
+              <div class="ai-gen-card" data-gen="image">
+                <div class="gen-icon">🖼</div>
+                <h4>AI 图片生成</h4>
+                <p>用提示词生成概念图、分镜稿</p>
+              </div>
+              <div class="ai-gen-card" data-gen="video">
+                <div class="gen-icon">🎥</div>
+                <h4>AI 视频生成</h4>
+                <p>文本/图片转短视频片段</p>
+              </div>
+              <div class="ai-gen-card" data-gen="voice">
+                <div class="gen-icon">🎙</div>
+                <h4>AI 配音</h4>
+                <p>多语种智能配音与声音克隆</p>
+              </div>
+              <div class="ai-gen-card" data-gen="script">
+                <div class="gen-icon">📜</div>
+                <h4>AI 剧本续写</h4>
+                <p>基于已有剧本智能扩展剧情</p>
+              </div>
+            </div>
+            <div id="genResult" style="margin-top:24px;"></div>
+          </div>
+          <!-- 看板 -->
+          <div class="workbench-panel" id="panel-kanban">
+            <div class="kanban-board" id="kanbanBoard">
+              <div class="kanban-col" data-status="todo">
+                <h4>📥 待处理</h4>
+                <div class="kanban-items" id="kanban-todo"></div>
+              </div>
+              <div class="kanban-col" data-status="doing">
+                <h4>🔄 进行中</h4>
+                <div class="kanban-items" id="kanban-doing"></div>
+              </div>
+              <div class="kanban-col" data-status="done">
+                <h4>✅ 已完成</h4>
+                <div class="kanban-items" id="kanban-done"></div>
+              </div>
+            </div>
+          </div>
+          <!-- 发布日历 -->
+          <div class="workbench-panel" id="panel-calendar">
+            <div style="margin-bottom:16px;">
+              <span id="calendarMonthLabel" style="font-weight:600;"></span>
+              <button class="wb-btn wb-btn-sm" id="btnPrevMonth" style="margin-left:12px;">‹ 上月</button>
+              <button class="wb-btn wb-btn-sm" id="btnNextMonth">下月 ›</button>
+            </div>
+            <div id="calendarGrid"></div>
+          </div>
+          <!-- 设置 -->
+          <div class="workbench-panel" id="panel-settings">
+            <div class="wb-card">
+              <h4>数据管理</h4>
+              <p>导出或导入所有工作台数据（选题、剧本、角色、看板任务）</p>
+              <button class="wb-btn wb-btn-primary" id="btnExportData" style="margin-right:8px;">导出数据 (JSON)</button>
+              <button class="wb-btn wb-btn-sm" id="btnImportData">导入数据</button>
+              <input type="file" id="importFileInput" accept=".json" style="display:none;">
+            </div>
+            <div class="wb-card">
+              <h4>清除数据</h4>
+              <p style="color:#ef4444;">此操作将清除所有本地保存的工作台数据，不可恢复。</p>
+              <button class="wb-btn wb-btn-danger" id="btnClearData">清除所有数据</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 案例展示 ===== -->
+  <section class="section cases" id="cases">
+    <div class="container">
+      <h2 class="section-title reveal">精选案例</h2>
+      <p class="section-subtitle reveal">量子美学 × AI 创作的实践作品</p>
+      <div class="cases-grid">
+        <div class="case-card reveal">
+          <div class="case-thumb">🎬</div>
+          <div class="case-info">
+            <h3>《量子纠缠》系列短剧</h3>
+            <p>以量子纠缠为叙事核心的科幻短剧系列，探索跨越时空的情感联结与命运交织。</p>
+            <span class="case-tag">AI 短剧</span>
+          </div>
+        </div>
+        <div class="case-card reveal">
+          <div class="case-thumb">🐱</div>
+          <div class="case-info">
+            <h3>《薛定谔的猫》科普动画</h3>
+            <p>用生动有趣的动画语言解读量子力学中最著名的思想实验，让科学走进大众视野。</p>
+            <span class="case-tag">科普动画</span>
+          </div>
+        </div>
+        <div class="case-card reveal">
+          <div class="case-thumb">⚛</div>
+          <div class="case-info">
+            <h3>量子计算入门系列</h3>
+            <p>从量子比特到量子算法，用视觉叙事的方式为零基础观众打开量子计算的大门。</p>
+            <span class="case-tag">教育视频</span>
+          </div>
+        </div>
+        <div class="case-card reveal">
+          <div class="case-thumb">🚀</div>
+          <div class="case-info">
+            <h3>AI 生成科幻微电影</h3>
+            <p>全流程 AI 辅助制作的科幻微电影——从概念设计到最终成片，AI 深度参与每一个环节。</p>
+            <span class="case-tag">微电影</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 联系我们 ===== -->
+  <section class="section contact" id="contact">
+    <div class="container">
+      <h2 class="section-title reveal">联系我们</h2>
+      <p class="section-subtitle reveal">期待与您共同探索创意的量子态</p>
+      <div class="contact-wrapper reveal">
+        <form class="contact-form" id="contactForm">
+          <div class="form-group">
+            <label for="contactName">姓名</label>
+            <input type="text" id="contactName" placeholder="你的名字" required>
+          </div>
+          <div class="form-group">
+            <label for="contactEmail">邮箱</label>
+            <input type="email" id="contactEmail" placeholder="your@email.com" required>
+          </div>
+          <div class="form-group">
+            <label for="contactMessage">留言</label>
+            <textarea id="contactMessage" placeholder="写下你想说的话..." required></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">发送消息</button>
+          <div id="contactFeedback" style="margin-top:8px; font-size:0.85rem;"></div>
+        </form>
+        <div class="contact-info-side">
+          <div class="contact-info-item">
+            <div class="ci-icon">📧</div>
+            <div class="ci-text">
+              <h4>邮箱</h4>
+              <a href="mailto:studio@quantum-studio.io">studio@quantum-studio.io</a>
+            </div>
+          </div>
+          <div class="contact-info-item">
+            <div class="ci-icon">🌐</div>
+            <div class="ci-text">
+              <h4>GitHub</h4>
+              <a href="https://github.com/BalanceKdb/quantum-studio-web" target="_blank" rel="noopener">BalanceKdb/quantum-studio-web</a>
+            </div>
+          </div>
+          <div class="contact-info-item">
+            <div class="ci-icon">📍</div>
+            <div class="ci-text">
+              <h4>地址</h4>
+              <span>量子态 · 随时随地</span>
+            </div>
+          </div>
+          <div class="social-links">
+            <a href="#" class="social-link" title="GitHub">⌨</a>
+            <a href="#" class="social-link" title="Twitter / X">𝕏</a>
+            <a href="#" class="social-link" title="Bilibili">B</a>
+            <a href="#" class="social-link" title="YouTube">▶</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 页脚 ===== -->
+  <footer class="footer">
+    <div class="container">
+      <div class="social-links">
+        <a href="#" class="social-link" title="GitHub">⌨</a>
+        <a href="#" class="social-link" title="Twitter / X">𝕏</a>
+        <a href="#" class="social-link" title="Bilibili">B</a>
+        <a href="#" class="social-link" title="YouTube">▶</a>
+      </div>
+      <p>&copy; 2026 量子事务所 Quantum Studio. All rights reserved. Built with quantum aesthetics.</p>
+    </div>
+  </footer>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
 </body>
 </html>
